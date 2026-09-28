@@ -21,6 +21,8 @@ export interface InvitationInput {
 
 /** Compte du personnel, tel que lu dans la table `utilisateurs`. */
 export interface Profil {
+  /** Destinataire unique du récapitulatif et des alertes urgentes. */
+  notificationsEmail: boolean
   /** Identifiant, identique à `auth.users.id` */
   id: string
   /** Nom complet affiché dans la colonne « Traitant » */

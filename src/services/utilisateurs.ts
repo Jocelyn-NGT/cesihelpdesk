@@ -11,8 +11,8 @@
  *
  * Les écritures sont réservées aux administrateurs par la politique
  * `utilisateurs_gestion_admin`, et limitées aux colonnes `nom_complet`, `role`
- * et `actif` par un GRANT au niveau colonne. Aucune suppression : un compte
- * porte l'historique des incidents qu'il a traités, on le désactive.
+ * et `actif` par un GRANT au niveau colonne. La suppression définitive passe par la fonction Edge comptes : elle supprime
+ * aussi l’identité Auth et libère les incidents attribués.
  *
  * La création, elle, ne passe pas par cette table : l'identité vit dans
  * `auth.users`, hors de portée du navigateur. Elle passe par la fonction Edge
@@ -23,6 +23,7 @@ import { supabase } from '../lib/supabase'
 import type { InvitationInput, Profil, Role } from '../types/auth'
 
 type UtilisateurRow = {
+  notifications_email: boolean
   id: string
   nom_complet: string
   email: string
@@ -30,9 +31,11 @@ type UtilisateurRow = {
   actif: boolean
 }
 
-const SELECTION = 'id, nom_complet, email, role, actif'
+const SELECTION_PROFIL = 'id, nom_complet, email, role, actif'
+const SELECTION = `${SELECTION_PROFIL}, notifications_email`
 
 const mapProfil = (row: UtilisateurRow): Profil => ({
+  notificationsEmail: Boolean(row.notifications_email),
   id: row.id,
   nomComplet: row.nom_complet,
   email: row.email,
@@ -86,6 +89,25 @@ const lienDeLaFonctionComptes = async (charge: Record<string, unknown>, repli: s
 }
 
 export const utilisateurService = {
+  async choisirDestinataire(id: string | null): Promise<void> {
+    const { error } = await supabase.rpc('choisir_destinataire_notifications', { p_id: id })
+    if (error) throw new Error(messageErreur(error, 'Impossible de choisir le destinataire'))
+  },
+
+  async supprimer(id: string): Promise<void> {
+    const { data, error } = await supabase.functions.invoke<{ supprime?: boolean; erreur?: string }>('comptes', {
+      body: { action: 'supprimer', id },
+    })
+    if (error) {
+      const contexte = (error as { context?: unknown }).context
+      if (contexte instanceof Response) {
+        const corps = await contexte.json().catch(() => null) as { erreur?: string } | null
+        if (corps?.erreur) throw new Error(corps.erreur)
+      }
+      throw new Error(error.message)
+    }
+    if (!data?.supprime) throw new Error(data?.erreur || 'Suppression non confirmée.')
+  },
   /**
    * Charge le compte du personnel correspondant à un identifiant d'authentification.
    *
@@ -96,7 +118,7 @@ export const utilisateurService = {
   async getProfil(id: string): Promise<Profil | null> {
     const { data, error } = await supabase
       .from('utilisateurs')
-      .select(SELECTION)
+      .select(SELECTION_PROFIL)
       .eq('id', id)
       .maybeSingle()
 
@@ -113,7 +135,7 @@ export const utilisateurService = {
   async listActifs(): Promise<Profil[]> {
     const { data, error } = await supabase
       .from('utilisateurs')
-      .select(SELECTION)
+      .select(SELECTION_PROFIL)
       .eq('actif', true)
       .order('nom_complet', { ascending: true })
 

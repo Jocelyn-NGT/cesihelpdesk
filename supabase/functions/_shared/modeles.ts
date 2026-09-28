@@ -87,7 +87,7 @@ export const alerteUrgente = (ticket: TicketCourriel, urlFiche: string) => {
     </table>
     <p style="margin:0 0 6px;color:#6B7280;">Description</p>
     <p style="margin:0 0 20px;padding:12px;background:#F3F4F6;border-radius:6px;white-space:pre-wrap;">${echapper(ticket.description)}</p>
-    ${urlFiche ? `<a href="${urlFiche}" style="display:inline-block;background:${NOIR};color:#fff;text-decoration:none;font-weight:bold;padding:12px 20px;border-radius:6px;">Ouvrir la fiche</a>` : ''}
+    ${urlFiche ? `<a href="${echapper(urlFiche)}" style="display:inline-block;background:${NOIR};color:#fff;text-decoration:none;font-weight:bold;padding:12px 20px;border-radius:6px;">Ouvrir la fiche</a>` : ''}
     `,
     '#B91C1C',
   )
@@ -132,7 +132,7 @@ export const recapHebdomadaire = (
   // Le cas « aucun incident » est traité explicitement : recevoir un tableau
   // vide sans explication laisse penser à une panne du service.
   const corps = tickets.length === 0
-    ? '<p style="margin:0;">Aucun nouvel incident n\'a été déclaré cette semaine.</p>'
+    ? `<p style="margin:0;">Aucun nouvel incident n'a été déclaré sur cette période.</p>${urlSuivi ? `<p><a href="${echapper(urlSuivi)}">Ouvrir le suivi des incidents</a></p>` : ''}`
     : `
       <p style="margin:0 0 16px;">
         <strong>${tickets.length}</strong> nouvel(le)(s) incident(s) déclaré(s) ${echapper(periode)},
@@ -153,11 +153,11 @@ export const recapHebdomadaire = (
           </td>
         </tr>`).join('')}
       </table>
-      ${urlSuivi ? `<p style="margin:20px 0 0;"><a href="${urlSuivi}" style="display:inline-block;background:${NOIR};color:#fff;text-decoration:none;font-weight:bold;padding:12px 20px;border-radius:6px;">Ouvrir le suivi des incidents</a></p>` : ''}
+      ${urlSuivi ? `<p style="margin:20px 0 0;"><a href="${echapper(urlSuivi)}" style="display:inline-block;background:${NOIR};color:#fff;text-decoration:none;font-weight:bold;padding:12px 20px;border-radius:6px;">Ouvrir le suivi des incidents</a></p>` : ''}
     `
 
   const texte = tickets.length === 0
-    ? `Aucun nouvel incident n'a été déclaré cette semaine (${periode}).`
+    ? `Aucun nouvel incident n'a été déclaré sur cette période (${periode}).\n${urlSuivi ? `Suivi : ${urlSuivi}` : ''}`
     : [
         `${tickets.length} nouvel(le)(s) incident(s) ${periode}, dont ${urgents.length} avec risque d'accident.`,
         '',

@@ -11,7 +11,7 @@
 #
 # Usage (sur la VM) :
 #   bash deploy/scripts/configurer-notifications.sh           # configure
-#   bash deploy/scripts/configurer-notifications.sh --tester  # + récapitulatif de test et simulation de purge
+#   bash deploy/scripts/configurer-notifications.sh --tester  # + traitement des messages en attente et simulation de purge
 #
 # Variables : SUPABASE_DIR (défaut /opt/supabase).
 
@@ -38,11 +38,9 @@ SQL
 psql_db -c "select cle, case when cle = 'secret_notifications' then '(défini, ' || length(valeur) || ' car.)' else valeur end as valeur from public.configuration order by cle;"
 
 if [ "${1:-}" = "--tester" ]; then
-  echo "→ Appel direct de la fonction (mode recap) pour valider secret et transport"
-  reponse="$(curl -s -X POST "http://127.0.0.1:8001/functions/v1/notifications" \
-    -H "x-secret-notifications: $FUNCTION_SECRET" -H "Content-Type: application/json" \
-    -d '{"mode":"recap"}')"
-  echo "   $reponse"
+  echo "→ Planification et traitement des messages en attente"
+  psql_db -c 'select public.planifier_notifications();'
+  echo "   Aucun récapitulatif artificiel n'est créé ; seuls les messages arrivés à échéance partent."
   echo "→ Dernières lignes d'email_log"
   psql_db -c "select type, destinataires, statut, erreur, envoye_le from public.email_log order by id desc limit 3;"
   echo "   En mode console, le corps du message est dans : docker logs supabase-edge-functions --tail 40"

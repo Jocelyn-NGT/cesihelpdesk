@@ -45,7 +45,12 @@ export const useTicketFilters = (tickets: Ticket[]) => {
     dateFin: parametres.get(PARAM.dateFin) ?? '',
     salles: parametres.getAll(PARAM.salles),
     types: parametres.getAll(PARAM.types),
-    statuts: parametres.getAll(PARAM.statuts) as Status[],
+    // Sans choix explicite, le suivi affiche uniquement les incidents ouverts.
+    // « TOUS » distingue le choix volontaire de tous les statuts de l'absence
+    // de filtre dans l'URL, y compris après rechargement ou retour d'une fiche.
+    statuts: parametres.has(PARAM.statuts)
+      ? parametres.getAll(PARAM.statuts).filter(statut => statut !== 'TOUS') as Status[]
+      : ['NOUVEAU', 'EN_COURS', 'EN_ATTENTE'],
     traitants: parametres.getAll(PARAM.traitants),
     risque: parametres.get(PARAM.risque) === null ? null : parametres.get(PARAM.risque) === 'oui',
   }), [parametres])
@@ -62,6 +67,7 @@ export const useTicketFilters = (tickets: Ticket[]) => {
 
       if (Array.isArray(valeur)) {
         valeur.forEach(element => suivants.append(cle, element))
+        if (critere === 'statuts' && valeur.length === 0) suivants.set(cle, 'TOUS')
       } else if (critere === 'risque') {
         if (valeur !== null) suivants.set(cle, valeur ? 'oui' : 'non')
       } else if (valeur) {
@@ -85,7 +91,7 @@ export const useTicketFilters = (tickets: Ticket[]) => {
     }, { replace: true })
   }, [setParametres])
 
-  /** Efface tous les critères sans toucher aux autres paramètres d'URL. */
+  /** Revient à la vue par défaut (incidents non terminés). */
   const reinitialiser = useCallback(() => {
     setParametres(actuels => {
       const suivants = new URLSearchParams(actuels)

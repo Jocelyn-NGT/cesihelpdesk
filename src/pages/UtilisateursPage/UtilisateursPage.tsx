@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog/ConfirmDialog'
 import { Icons } from '../../components/ui/Icons/Icons'
 import { useAuth } from '../../hooks/useAuth'
 import { useTickets } from '../../hooks/useTickets'
@@ -151,6 +152,7 @@ const LigneEdition = ({ compte, edition, erreur, occupe, onChange, onEnregistrer
       <td className="p-2 pt-4 text-sm text-gray-600 break-all">{compte.email}</td>
       <td className="p-2 pt-4"><EtiquetteRole role={compte.role} /></td>
       <td className="p-2 pt-4"><Etat actif={compte.actif} /></td>
+      <td className="p-2 pt-4 text-sm">{compte.notificationsEmail ? 'Destinataire' : '—'}</td>
       <td className="p-2">
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onEnregistrer} disabled={occupe} className={classesBoutonPrincipal}>
@@ -169,8 +171,8 @@ const LigneEdition = ({ compte, edition, erreur, occupe, onChange, onEnregistrer
  * Gestion des comptes du personnel.
  *
  * Inviter quelqu'un, corriger un nom affiché, changer un rôle, activer ou
- * désactiver. Pas de suppression : un compte porte l'historique des incidents
- * qu'il a traités.
+ * désactiver, sélectionner le destinataire des notifications et supprimer
+ * définitivement un compte avec confirmation et désassignation des incidents.
  *
  * L'invitation et la réinitialisation de mot de passe produisent un LIEN, que
  * l'administrateur transmet lui-même : Supabase Auth n'a pas de relais SMTP sur
@@ -197,6 +199,7 @@ export const UtilisateursPage = () => {
   const [erreurInvitation, setErreurInvitation] = useState<string | null>(null)
   const [envoiInvitation, setEnvoiInvitation] = useState(false)
   const [lien, setLien] = useState<LienProduit | null>(null)
+  const [aSupprimer, setASupprimer] = useState<Profil | null>(null)
 
   const charger = useCallback(
     () => utilisateurService.listerTous()
@@ -335,7 +338,33 @@ export const UtilisateursPage = () => {
     }
   }
 
-  const actionsBloquees = occupe !== null || edition !== null
+  const choisirDestinataire = async (compte: Profil) => {
+    setOccupe(compte.id)
+    try {
+      await utilisateurService.choisirDestinataire(compte.notificationsEmail ? null : compte.id)
+      await charger()
+      toast.succes(compte.notificationsEmail ? 'Aucun destinataire sélectionné.' : `Les notifications seront adressées à ${compte.email}.`)
+    } catch (cause) {
+      toast.erreurDe(cause, 'Impossible de modifier le destinataire.')
+    } finally { setOccupe(null) }
+  }
+
+  const supprimerCompte = async () => {
+    if (!aSupprimer) return
+    setOccupe(aSupprimer.id)
+    try {
+      await utilisateurService.supprimer(aSupprimer.id)
+      setASupprimer(null)
+      setLien(null)
+      await charger()
+      await rechargerTickets()
+      toast.succes('Compte supprimé. Ses incidents sont désormais non assignés.')
+    } catch (cause) {
+      toast.erreurDe(cause, 'Impossible de supprimer ce compte.')
+    } finally { setOccupe(null) }
+  }
+
+  const actionsBloquees = occupe !== null || edition !== null || aSupprimer !== null
 
   return (
     <div className="space-y-6">
@@ -413,6 +442,13 @@ export const UtilisateursPage = () => {
       {lien && <BoiteLien key={lien.url} lien={lien} onFermer={() => setLien(null)} />}
 
       <section aria-labelledby="liste-titre" className="bg-white rounded-xl shadow p-4 sm:p-6">
+        <p className="text-sm text-gray-600 mb-3">
+          Cochez un destinataire pour le récapitulatif du vendredi à 8 h (heure de Paris)
+          et les alertes immédiates en cas de risque. Cocher un autre compte remplace le précédent.
+        </p>
+        {!chargement && !comptes.some(c => c.notificationsEmail && c.actif) && (
+          <p role="status" className="mb-4 text-sm font-bold text-amber-800">Aucun destinataire sélectionné : les notifications ne peuvent pas être envoyées.</p>
+        )}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <h2 id="liste-titre" className="text-lg font-black uppercase tracking-tight">Liste des comptes</h2>
           <div className="relative sm:w-72">
@@ -437,6 +473,7 @@ export const UtilisateursPage = () => {
                 <th scope="col" className="p-2 font-bold text-sm">E-mail</th>
                 <th scope="col" className="p-2 font-bold text-sm">Rôle</th>
                 <th scope="col" className="p-2 font-bold text-sm">État</th>
+                <th scope="col" className="p-2 font-bold text-sm">Emails incidents</th>
                 <th scope="col" className="p-2 font-bold text-sm text-right">Actions</th>
               </tr>
             </thead>
@@ -491,6 +528,11 @@ export const UtilisateursPage = () => {
                       )}
                     </td>
                     <td className="p-2"><Etat actif={compte.actif} /></td>
+                    <td className="p-2 text-center">
+                      <input type="checkbox" checked={compte.notificationsEmail} disabled={actionsBloquees || !compte.actif}
+                        aria-label={`Envoyer les notifications à ${compte.nomComplet}`}
+                        onChange={() => void choisirDestinataire(compte)} className="w-5 h-5 accent-black" />
+                    </td>
                     <td className="p-2">
                       <div className="flex justify-end gap-2">
                         <button
@@ -522,6 +564,12 @@ export const UtilisateursPage = () => {
                         >
                           {occupe === compte.id ? '…' : compte.actif ? 'Désactiver' : 'Réactiver'}
                         </button>
+                        <button type="button" onClick={() => setASupprimer(compte)}
+                          disabled={actionsBloquees || estMoi || (compte.role === 'admin' && compte.actif && nbAdmins <= 1)}
+                          aria-label={`Supprimer le compte ${compte.nomComplet}`} title="Supprimer définitivement le compte"
+                          className="inline-flex items-center justify-center min-w-11 min-h-11 rounded text-red-700 hover:bg-red-50 disabled:opacity-30">
+                          <Icons.Trash />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -530,7 +578,7 @@ export const UtilisateursPage = () => {
 
               {chargement && (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-gray-500" role="status" aria-live="polite">
+                  <td colSpan={6} className="p-8 text-center text-gray-500" role="status" aria-live="polite">
                     Chargement des comptes…
                   </td>
                 </tr>
@@ -538,7 +586,7 @@ export const UtilisateursPage = () => {
 
               {!chargement && resultats.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-gray-500">
+                  <td colSpan={6} className="p-8 text-center text-gray-500">
                     {comptes.length === 0
                       ? 'Aucun compte enregistré.'
                       : 'Aucun compte ne correspond à la recherche.'}
@@ -550,6 +598,15 @@ export const UtilisateursPage = () => {
         </div>
 
       </section>
+      {aSupprimer && (
+        <ConfirmDialog ouvert titre={`Supprimer le compte de ${aSupprimer.nomComplet} ?`}
+          libelleConfirmer="Supprimer définitivement" occupe={occupe !== null}
+          onConfirmer={() => void supprimerCompte()} onAnnuler={() => setASupprimer(null)}>
+          <p><strong>{aSupprimer.nomComplet}</strong> — {aSupprimer.email}</p>
+          <p>Ce compte et son accès seront supprimés définitivement. Tous les incidents attribués à cette personne seront automatiquement remis en « Non assigné ». Les incidents seront conservés.</p>
+          {aSupprimer.notificationsEmail && <p className="font-bold">Ce compte reçoit les notifications. Après suppression, vous devrez sélectionner un autre destinataire.</p>}
+        </ConfirmDialog>
+      )}
     </div>
   )
 }

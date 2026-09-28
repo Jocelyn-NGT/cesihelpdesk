@@ -1,7 +1,7 @@
 /**
- * Gestion des comptes du personnel : invitation et réinitialisation de mot de passe.
+ * Gestion des comptes : invitation, réinitialisation et suppression définitive.
  *
- * Les deux actions produisent un LIEN, rendu à l'administrateur. Aucune n'envoie
+ * Invitation et réinitialisation produisent un LIEN, rendu à l'administrateur. Aucune n'envoie
  * d'e-mail : Supabase Auth n'a pas de relais SMTP sur cette instance (le
  * transport piloté par MAIL_TRANSPORT ne sert qu'aux notifications d'incidents).
  * L'administrateur transmet donc le lien par le canal de son choix — ce qui
@@ -42,7 +42,8 @@ const ENTETES_CORS = {
 }
 
 interface CorpsRequete {
-  action?: 'inviter' | 'reinitialiser'
+  action?: 'inviter' | 'reinitialiser' | 'supprimer'
+  id?: string
   email?: string
   nom_complet?: string
   role?: 'admin' | 'technicien'
@@ -87,7 +88,7 @@ Deno.serve(async requete => {
   if (!url || !cleService) return reponse({ erreur: 'Fonction mal configurée : clé de service absente.' }, 500)
   // Sans elle, le lien ne mènerait nulle part : mieux vaut refuser que livrer à
   // l'administrateur une adresse qu'il transmettra pour rien.
-  if (!urlApplication) return reponse({ erreur: 'Fonction mal configurée : PUBLIC_APP_URL absent.' }, 500)
+
 
   const admin = createClient(url, cleService, { auth: { persistSession: false, autoRefreshToken: false } })
 
@@ -115,6 +116,25 @@ Deno.serve(async requete => {
   // 2. Que demande-t-il ?
   // ---------------------------------------------------------------------
   const corps: CorpsRequete = await requete.json().catch(() => ({}))
+  if (corps.action === 'supprimer') {
+    if (!corps.id || !/^[0-9a-f-]{36}$/i.test(corps.id)) return reponse({ erreur: 'Identifiant invalide.' }, 400)
+    if (corps.id === user.id) return reponse({ erreur: 'Vous ne pouvez pas supprimer votre propre compte.' }, 409)
+    const { data: cible, error: erreurCible } = await admin.from('utilisateurs').select('id, role, actif').eq('id', corps.id).maybeSingle()
+    if (erreurCible) return reponse({ erreur: decrire(erreurCible) }, 500)
+    if (!cible) return reponse({ erreur: 'Compte introuvable.' }, 404)
+    if (cible.role === 'admin' && cible.actif) {
+      const { count, error } = await admin.from('utilisateurs').select('id', { count: 'exact', head: true }).eq('role', 'admin').eq('actif', true)
+      if (error) return reponse({ erreur: decrire(error) }, 500)
+      if ((count ?? 0) <= 1) return reponse({ erreur: 'Impossible de supprimer le dernier administrateur actif.' }, 409)
+    }
+    // Une seule opération Auth : cascade transactionnelle vers le profil,
+    // puis ON DELETE SET NULL sur les incidents. Le trigger protège aussi
+    // le dernier administrateur en cas de requêtes concurrentes.
+    const { error } = await admin.auth.admin.deleteUser(corps.id)
+    if (error) return reponse({ erreur: decrire(error) }, 500)
+    return reponse({ supprime: true })
+  }
+  if (!urlApplication) return reponse({ erreur: 'Fonction mal configurée : PUBLIC_APP_URL absent.' }, 500)
   const email = (corps.email ?? '').trim().toLowerCase()
   if (!email) return reponse({ erreur: 'Adresse e-mail manquante.' }, 400)
 

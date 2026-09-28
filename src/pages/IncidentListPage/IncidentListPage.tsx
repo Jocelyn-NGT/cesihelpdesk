@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { MultiSelect } from '../../components/admin/MultiSelect/MultiSelect'
 import { SuppressionIncident } from '../../components/admin/SuppressionIncident/SuppressionIncident'
@@ -7,6 +7,8 @@ import { STATUSES, STATUS_ORDER } from '../../data/helpdesk'
 import { useTicketFilters } from '../../hooks/useTicketFilters'
 import { useTickets } from '../../hooks/useTickets'
 import { useToast } from '../../hooks/useToast'
+import { utilisateurService } from '../../services/utilisateurs'
+import type { Profil } from '../../types/auth'
 import type { Status, Ticket } from '../../types/helpdesk'
 import { valeursDistinctes, type ColonneTri } from '../../utils/ticketFilters'
 
@@ -44,8 +46,12 @@ export const IncidentListPage = () => {
   const { tickets, chargement, modifier, supprimer } = useTickets()
   const toast = useToast()
   const [exportEnCours, setExportEnCours] = useState(false)
+  const [pdfEnCours, setPdfEnCours] = useState(false)
+  const [selection, setSelection] = useState<string[]>([])
   const [aSupprimer, setASupprimer] = useState<Ticket | null>(null)
   const [suppressionEnCours, setSuppressionEnCours] = useState(false)
+  const [equipe, setEquipe] = useState<Profil[]>([])
+  const [affectationsEnCours, setAffectationsEnCours] = useState<string[]>([])
   const {
     filtres, filtresActifs, colonneTri, sensTri, resultats,
     definir, trierPar, reinitialiser, requete,
@@ -56,6 +62,46 @@ export const IncidentListPage = () => {
   const sallesDisponibles = useMemo(() => valeursDistinctes(tickets, t => [t.room]), [tickets])
   const typesDisponibles = useMemo(() => valeursDistinctes(tickets, t => t.types), [tickets])
   const traitantsDisponibles = useMemo(() => valeursDistinctes(tickets, t => [t.handler]), [tickets])
+  const idsSelectionnes = useMemo(() => new Set(selection), [selection])
+  const selectionnes = useMemo(() => tickets.filter(ticket => idsSelectionnes.has(ticket.id)), [tickets, idsSelectionnes])
+  const tousVisiblesSelectionnes = resultats.length > 0 && resultats.every(ticket => idsSelectionnes.has(ticket.id))
+
+  const selectionnerVisibles = () => {
+    const visibles = new Set(resultats.map(ticket => ticket.id))
+    setSelection(ids => tousVisiblesSelectionnes
+      ? ids.filter(id => !visibles.has(id))
+      : [...new Set([...ids, ...visibles])])
+  }
+
+  const exporterPdf = async () => {
+    setPdfEnCours(true)
+    try {
+      const { exporterIncidentsPdf } = await import('../../services/pdfExport')
+      await exporterIncidentsPdf(selectionnes)
+      toast.succes(`${selectionnes.length} incident(s) exporté(s) en PDF.`)
+    } catch (cause) {
+      toast.erreurDe(cause, "L'export PDF a échoué.")
+    } finally {
+      setPdfEnCours(false)
+    }
+  }
+
+  useEffect(() => {
+    let monte = true
+    utilisateurService.listActifs()
+      .then(membres => { if (monte) setEquipe(membres) })
+      .catch(cause => { if (monte) toast.erreurDe(cause, 'Impossible de charger les traitants.') })
+    return () => { monte = false }
+  }, [toast])
+
+  const affecter = async (ticketId: string, traitantId: string) => {
+    setAffectationsEnCours(ids => [...ids, ticketId])
+    try {
+      await modifier(ticketId, 'handler', traitantId)
+    } finally {
+      setAffectationsEnCours(ids => ids.filter(id => id !== ticketId))
+    }
+  }
 
   const exporter = async () => {
     setExportEnCours(true)
@@ -101,6 +147,14 @@ export const IncidentListPage = () => {
         </div>
 
         <div className="flex flex-wrap gap-2 items-center">
+          <button
+            type="button"
+            onClick={() => void exporterPdf()}
+            disabled={pdfEnCours || selectionnes.length === 0}
+            className="flex items-center gap-2 bg-gray-800 hover:bg-black disabled:opacity-50 text-white px-4 py-2 min-h-11 rounded text-sm font-bold transition-colors"
+          >
+            {pdfEnCours ? 'Création du PDF…' : `Télécharger PDF (${selectionnes.length})`}
+          </button>
           {filtresActifs > 0 && (
             <button
               type="button"
@@ -128,6 +182,9 @@ export const IncidentListPage = () => {
           </caption>
           <thead>
             <tr className="border-b-2 border-black bg-gray-50">
+              <th scope="col" className="p-2 text-center">
+                <input type="checkbox" aria-label="Sélectionner tous les incidents affichés" checked={tousVisiblesSelectionnes} onChange={selectionnerVisibles} disabled={resultats.length === 0} className="w-4 h-4 accent-black cursor-pointer" />
+              </th>
               <EnTeteTri colonne="date" libelle="Date" colonneTri={colonneTri} sensTri={sensTri} trierPar={trierPar} />
               <EnTeteTri colonne="title" libelle="Titre" colonneTri={colonneTri} sensTri={sensTri} trierPar={trierPar} />
               <EnTeteTri colonne="room" libelle="Lieu" colonneTri={colonneTri} sensTri={sensTri} trierPar={trierPar} />
@@ -141,6 +198,7 @@ export const IncidentListPage = () => {
             {/* Ligne de filtres : un contrôle par colonne, comme demandé au
                 cahier des charges. Les valeurs sont reportées dans l'URL. */}
             <tr className="border-b-2 border-gray-200 bg-gray-50 align-top">
+              <td />
               <td className="p-2">
                 <div className="flex flex-col gap-1">
                   <input
@@ -208,6 +266,15 @@ export const IncidentListPage = () => {
                 key={ticket.id}
                 className={`border-b transition-colors ${ticket.risk ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}`}
               >
+                <td className="p-2 text-center">
+                  <input
+                    type="checkbox"
+                    aria-label={`Sélectionner l'incident n° ${ticket.id}`}
+                    checked={idsSelectionnes.has(ticket.id)}
+                    onChange={() => setSelection(ids => ids.includes(ticket.id) ? ids.filter(id => id !== ticket.id) : [...ids, ticket.id])}
+                    className="w-4 h-4 accent-black cursor-pointer"
+                  />
+                </td>
                 <td className="p-2 whitespace-nowrap">
                   <div className="text-sm">{dateCourte.format(new Date(ticket.createdAt))}</div>
                   <div className="text-xs text-gray-500">{heureCourte.format(new Date(ticket.createdAt))}</div>
@@ -235,7 +302,23 @@ export const IncidentListPage = () => {
                     ))}
                   </select>
                 </td>
-                <td className="p-2 text-sm">{ticket.handler || <span className="text-gray-400 italic">Non assigné</span>}</td>
+                <td className="p-2 text-sm">
+                  <select
+                    aria-label={`Traitant de l'incident n° ${ticket.id}`}
+                    value={ticket.handlerId ?? ''}
+                    onChange={e => void affecter(ticket.id, e.target.value)}
+                    disabled={affectationsEnCours.includes(ticket.id)}
+                    className="w-full min-w-36 max-w-52 border border-gray-300 rounded bg-white px-2 py-2 min-h-9 text-sm disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-black"
+                  >
+                    <option value="">Non assigné</option>
+                    {ticket.handlerId && !equipe.some(membre => membre.id === ticket.handlerId) && (
+                      <option value={ticket.handlerId}>{ticket.handler || 'Compte désactivé'}</option>
+                    )}
+                    {equipe.map(membre => (
+                      <option key={membre.id} value={membre.id}>{membre.nomComplet}</option>
+                    ))}
+                  </select>
+                </td>
                 <td className="p-2 text-center">
                   {ticket.risk
                     ? <span className="text-red-700 inline-flex" title="Risque d'accident signalé"><Icons.Alert /></span>
@@ -270,7 +353,7 @@ export const IncidentListPage = () => {
 
             {!chargement && resultats.length === 0 && (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-gray-500">
+                <td colSpan={9} className="p-8 text-center text-gray-500">
                   {tickets.length === 0
                     ? 'Aucun incident déclaré pour le moment.'
                     : 'Aucun incident ne correspond aux filtres sélectionnés.'}
