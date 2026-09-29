@@ -44,6 +44,7 @@ services:
       - ${HELPDESK_REPO}/supabase/functions/comptes:/home/deno/functions/comptes:ro
       - ${HELPDESK_REPO}/supabase/functions/maintenance:/home/deno/functions/maintenance:ro
       - ${HELPDESK_REPO}/supabase/functions/_shared:/home/deno/functions/_shared:ro
+      - ${HELPDESK_REPO}/supabase/functions/notifications-manuelles:/home/deno/functions/notifications-manuelles:ro
     environment:
       FUNCTION_SECRET: ${FUNCTION_SECRET}
       MAIL_TRANSPORT: ${MAIL_TRANSPORT:-console}
