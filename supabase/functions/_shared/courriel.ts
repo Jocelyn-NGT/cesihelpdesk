@@ -4,13 +4,8 @@
  * Deux modes, choisis par le secret `MAIL_TRANSPORT` :
  *
  * - `console` (par défaut) : le message est écrit dans les journaux de la
- *   fonction, sans être envoyé. Permet de développer et de démontrer toute la
- *   chaîne (déclencheur, destinataires, gabarit, planification) **avant** que
- *   le service informatique du CESI n'ait fourni les identifiants SMTP.
- * - `smtp` : envoi réel via le relais SMTP de l'établissement.
- *
- * Passer de l'un à l'autre ne demande aucune modification de code, seulement
- * `supabase secrets set MAIL_TRANSPORT=smtp`.
+ *   fonction, sans être envoyé.
+ * - `smtp` : envoi réel via le relais SMTP configuré.
  */
 
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts'
@@ -29,87 +24,139 @@ export interface ResultatEnvoi {
   erreur?: string
 }
 
-const secret = (nom: string, defaut = ''): string => Deno.env.get(nom) ?? defaut
+/** Lit une variable d'environnement. */
+const secret = (nom: string, defaut = ''): string =>
+  Deno.env.get(nom) ?? defaut
 
 /**
- * Découpe une liste de destinataires séparés par des virgules ou des
- * points-virgules, en ignorant les entrées vides.
+ * Découpe une liste de destinataires séparés par des virgules
+ * ou des points-virgules.
  */
 export const listerDestinataires = (brut: string): string[] =>
-  brut.split(/[,;]/).map(adresse => adresse.trim()).filter(Boolean)
+  brut
+    .split(/[,;]/)
+    .map(adresse => adresse.trim())
+    .filter(Boolean)
 
 /**
  * Envoie un message selon le transport configuré.
  *
- * Ne lève jamais d'exception : un incident déclaré ne doit pas échouer parce
- * que le serveur de messagerie est indisponible. L'échec est renvoyé pour être
- * journalisé.
- *
- * @param message Message à envoyer.
- * @returns Le statut de l'envoi.
+ * Ne lève jamais d'exception :
+ * l'échec est renvoyé pour pouvoir être journalisé.
  */
-export const envoyer = async (message: Message): Promise<ResultatEnvoi> => {
+export const envoyer = async (
+  message: Message,
+): Promise<ResultatEnvoi> => {
+
+  // Vérification des destinataires
   if (message.destinataires.length === 0) {
-    return { statut: 'echec', erreur: 'Aucun destinataire configuré.' }
+    return {
+      statut: 'echec',
+      erreur: 'Aucun destinataire configuré.',
+    }
   }
 
+  // Mode d'envoi
   const transport = secret('MAIL_TRANSPORT', 'console')
 
+  /**
+   * MODE CONSOLE
+   */
   if (transport !== 'smtp') {
-    console.log('[courriel:simule] ------------------------------------------')
-    console.log('[courriel:simule] À      :', message.destinataires.join(', '))
-    console.log('[courriel:simule] Sujet  :', message.sujet)
-    console.log('[courriel:simule] Corps  :\n' + message.texte)
-    console.log('[courriel:simule] ------------------------------------------')
-    return { statut: 'simule' }
+    console.log('=== CESI HELPDESK — EMAIL SIMULÉ ===')
+    console.log('Destinataires :', message.destinataires.join(', '))
+    console.log('Sujet :', message.sujet)
+    console.log('Texte :')
+    console.log(message.texte)
+    console.log('=====================================')
+
+    return {
+      statut: 'simule',
+    }
   }
 
+  /**
+   * MODE SMTP
+   */
   const hote = secret('SMTP_HOST')
   const port = Number(secret('SMTP_PORT', '587'))
   const utilisateur = secret('SMTP_USER')
   const motDePasse = secret('SMTP_PASSWORD')
-  const adresseExpediteur = secret('SMTP_FROM', utilisateur)
 
-  // Nom affiché : une alerte « risque d'accident » doit être identifiable d'un
-  // coup d'œil dans une boîte encombrée. Sans ce nom, seule l'adresse technique
-  // du relais s'affiche.
+  const adresseExpediteur = secret(
+    'SMTP_FROM',
+    utilisateur,
+  )
+
   const nomExpediteur = secret('SMTP_SENDER_NAME')
-  const expediteur = nomExpediteur ? `${nomExpediteur} <${adresseExpediteur}>` : adresseExpediteur
 
+  const expediteur = nomExpediteur
+    ? `${nomExpediteur} <${adresseExpediteur}>`
+    : adresseExpediteur
+
+  /**
+   * Vérification de la configuration SMTP.
+   */
   if (!hote || !utilisateur || !motDePasse) {
-    return { statut: 'echec', erreur: 'Transport SMTP demandé mais SMTP_HOST / SMTP_USER / SMTP_PASSWORD manquent.' }
-  }
-
-  // `supabase-mail` est le service factice du .env amont de la pile self-hosted :
-  // la variable existe, le conteneur non. Sans ce contrôle, l'échec remonte sous
-  // forme d'erreur de résolution DNS, difficile à rattacher à sa cause.
-  if (hote === 'supabase-mail') {
     return {
       statut: 'echec',
-      erreur: "SMTP_HOST vaut « supabase-mail » : service inexistant dans la pile autohébergée. Lancez deploy/scripts/basculer-smtp.sh.",
+      erreur:
+        'Configuration SMTP incomplète : SMTP_HOST, SMTP_USER ou SMTP_PASSWORD manquant.',
     }
   }
 
+  /**
+   * Protection contre l'ancien serveur SMTP interne.
+   */
+  if (hote === 'supabase-mail') {
+    return {
+      statut: 'echec',
+      erreur:
+        'SMTP_HOST pointe encore vers supabase-mail. Configurez le serveur SMTP externe.',
+    }
+  }
+
+  /**
+   * Création du client SMTP.
+   *
+   * Port 465 -> TLS immédiat
+   * Port 587 -> STARTTLS géré par Denomailer
+   */
   const client = new SMTPClient({
     connection: {
       hostname: hote,
       port,
-      // Le port 465 est chiffré dès la connexion ; 587 démarre en clair puis
-      // bascule en TLS via STARTTLS.
       tls: port === 465,
-      auth: { username: utilisateur, password: motDePasse },
+      auth: {
+        username: utilisateur,
+        password: motDePasse,
+      },
     },
   })
 
-  // Un relais qui ne répond plus après la connexion laisserait `send()` en
-  // attente indéfiniment, et l'appel de la base avec lui. On borne l'attente :
-  // au-delà, c'est un échec journalisé, pas une requête qui pend.
+  /**
+   * Abandon de l'envoi au bout de 30 secondes.
+   */
   let minuteur: number | undefined
+
   const delai = new Promise<never>((_, rejeter) => {
-    minuteur = setTimeout(() => rejeter(new Error('Délai SMTP dépassé (30 s).')), 30_000)
+    minuteur = setTimeout(
+      () =>
+        rejeter(
+          new Error('Délai SMTP dépassé (30 s).'),
+        ),
+      30_000,
+    )
   })
 
   try {
+
+    /**
+     * Envoi du message.
+     *
+     * Denomailer gère lui-même l'encodage MIME
+     * du texte et du HTML.
+     */
     await Promise.race([
       client.send({
         from: expediteur,
@@ -120,17 +167,31 @@ export const envoyer = async (message: Message): Promise<ResultatEnvoi> => {
       }),
       delai,
     ])
-    return { statut: 'envoye' }
+
+    return {
+      statut: 'envoye',
+    }
+
   } catch (cause) {
-    return { statut: 'echec', erreur: cause instanceof Error ? cause.message : String(cause) }
+
+    return {
+      statut: 'echec',
+      erreur:
+        cause instanceof Error
+          ? cause.message
+          : String(cause),
+    }
+
   } finally {
-    clearTimeout(minuteur)
-    // `close()` peut lever, ou ne rien renvoyer du tout, si la connexion est
-    // déjà tombée. Sans ce filet, l'erreur de fermeture masquerait la vraie.
+
+    if (minuteur !== undefined) {
+      clearTimeout(minuteur)
+    }
+
     try {
       await client.close()
     } catch {
-      // connexion déjà fermée : rien à faire
+      // La connexion est peut-être déjà fermée.
     }
   }
 }

@@ -1,15 +1,13 @@
 /**
- * Gabarits des e-mails, aux couleurs du CESI.
- *
- * Les styles sont écrits en ligne : les clients de messagerie (Outlook en
- * particulier) ignorent les feuilles de style externes et une bonne partie des
- * balises `<style>`.
+ * Gabarits des e-mails CESI Helpdesk.
+ * Styles en ligne pour compatibilité Outlook / Gmail.
  */
 
 const JAUNE = '#FBE800'
 const NOIR = '#1A1A1A'
+const ROUGE = '#B91C1C'
+const GRIS = '#F3F4F6'
 
-/** Ticket tel que lu en base pour la composition des e-mails. */
 export interface TicketCourriel {
   id: number
   titre: string
@@ -29,7 +27,14 @@ const dateFr = (iso: string): string =>
     timeZone: 'Europe/Paris',
   })
 
-/** Échappe le texte inséré dans le HTML (le titre est saisi par un visiteur anonyme). */
+const dateCourteFr = (iso: string): string =>
+  new Date(iso).toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'Europe/Paris',
+  })
+
 const echapper = (valeur: string): string =>
   valeur
     .replaceAll('&', '&amp;')
@@ -37,134 +42,380 @@ const echapper = (valeur: string): string =>
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
 
-const enveloppe = (titre: string, contenu: string, accent: string): string => `
-<div style="font-family:Helvetica,Arial,sans-serif;background:#F3F4F6;padding:24px;">
-  <div style="max-width:600px;margin:0 auto;background:#fff;border:3px solid ${NOIR};border-radius:10px;overflow:hidden;">
-    <div style="background:${accent};border-bottom:3px solid ${NOIR};padding:20px 24px;">
-      <div style="font-weight:900;font-size:20px;color:${accent === JAUNE ? NOIR : '#fff'};">CESI HELP DESK</div>
-      <div style="font-size:18px;font-weight:bold;margin-top:4px;color:${accent === JAUNE ? NOIR : '#fff'};">${echapper(titre)}</div>
+const enveloppe = (
+  titre: string,
+  contenu: string,
+  accent: string,
+): string => `
+<div style="margin:0;padding:24px;background:${GRIS};font-family:Arial,Helvetica,sans-serif;color:${NOIR};">
+
+  <div style="
+    max-width:700px;
+    margin:0 auto;
+    background:#ffffff;
+    border-radius:10px;
+    overflow:hidden;
+    border:1px solid #D1D5DB;
+  ">
+
+    <div style="
+      background:${accent};
+      padding:22px 28px;
+    ">
+      <div style="
+        font-size:13px;
+        font-weight:bold;
+        letter-spacing:1px;
+        color:${accent === JAUNE ? NOIR : '#ffffff'};
+      ">
+        CESI HELP DESK
+      </div>
+
+      <div style="
+        font-size:22px;
+        font-weight:bold;
+        margin-top:5px;
+        color:${accent === JAUNE ? NOIR : '#ffffff'};
+      ">
+        ${echapper(titre)}
+      </div>
     </div>
-    <div style="padding:24px;color:${NOIR};font-size:14px;line-height:1.6;">
+
+    <div style="
+      padding:28px;
+      font-size:14px;
+      line-height:1.6;
+    ">
       ${contenu}
     </div>
-    <div style="padding:14px 24px;background:#F3F4F6;border-top:1px solid #e5e7eb;font-size:11px;color:#6B7280;">
-      Message automatique du portail de signalement des incidents du campus CESI.
-      Ne pas répondre à cet e-mail.
+
+    <div style="
+      padding:15px 28px;
+      background:${GRIS};
+      border-top:1px solid #E5E7EB;
+      font-size:11px;
+      color:#6B7280;
+    ">
+      Message automatique du portail CESI Helpdesk.<br>
+      Merci de ne pas répondre à cet e-mail.
     </div>
+
   </div>
+
 </div>`
 
-const ligne = (etiquette: string, valeur: string): string =>
-  `<tr>
-    <td style="padding:4px 12px 4px 0;color:#6B7280;white-space:nowrap;vertical-align:top;">${etiquette}</td>
-    <td style="padding:4px 0;font-weight:bold;">${echapper(valeur)}</td>
-  </tr>`
+const bouton = (texte: string, url: string): string =>
+  url
+    ? `
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:24px 0 0;">
+        <tr>
+          <td style="background:${NOIR};border-radius:6px;">
+            <a href="${echapper(url)}"
+               style="
+                 display:inline-block;
+                 padding:13px 22px;
+                 color:#ffffff;
+                 text-decoration:none;
+                 font-size:14px;
+                 font-weight:bold;
+               ">
+              ${echapper(texte)}
+            </a>
+          </td>
+        </tr>
+      </table>`
+    : ''
 
-/**
- * Compose l'alerte envoyée immédiatement quand la case « Risque d'accident »
- * est cochée.
- *
- * @param ticket Incident concerné.
- * @param urlFiche Lien vers la fiche complète, ou chaîne vide.
- */
-export const alerteUrgente = (ticket: TicketCourriel, urlFiche: string) => {
-  const sujet = `[URGENT] Risque signalé — ${ticket.salle} — incident n° ${ticket.id}`
+/* =========================================================
+   HELPDESK URGENT
+   ========================================================= */
+
+export const alerteUrgente = (
+  ticket: TicketCourriel,
+  urlFiche: string,
+) => {
+
+  const sujet = `Helpdesk Urgent — Incident n°${ticket.id} — ${ticket.salle}`
 
   const html = enveloppe(
-    'Risque d\'accident ou de blessure',
+    'Helpdesk Urgent',
     `
-    <p style="margin:0 0 16px;">
-      Un incident présentant un <strong>risque d'accident ou de blessure</strong>
-      vient d'être signalé. Une vérification sur place est demandée.
-    </p>
-    <table style="border-collapse:collapse;width:100%;margin-bottom:16px;">
-      ${ligne('Incident', `n° ${ticket.id}`)}
-      ${ligne('Salle', ticket.salle)}
-      ${ligne('Titre', ticket.titre)}
-      ${ligne('Type(s)', ticket.types.join(', ') || 'Non précisé')}
-      ${ligne('Déclaré le', dateFr(ticket.created_at))}
-      ${ligne('Par', `${ticket.demandeur_nom} (${ticket.demandeur_email})`)}
-    </table>
-    <p style="margin:0 0 6px;color:#6B7280;">Description</p>
-    <p style="margin:0 0 20px;padding:12px;background:#F3F4F6;border-radius:6px;white-space:pre-wrap;">${echapper(ticket.description)}</p>
-    ${urlFiche ? `<a href="${echapper(urlFiche)}" style="display:inline-block;background:${NOIR};color:#fff;text-decoration:none;font-weight:bold;padding:12px 20px;border-radius:6px;">Ouvrir la fiche</a>` : ''}
+      <p style="
+        margin:0 0 22px;
+        font-size:16px;
+        line-height:1.6;
+      ">
+        Un incident présentant un
+        <strong style="color:${ROUGE};">
+          risque d'accident ou de blessure
+        </strong>
+        vient d'être signalé.
+      </p>
+
+      <div style="
+        border-left:5px solid ${ROUGE};
+        background:#FEF2F2;
+        padding:16px 18px;
+        margin-bottom:22px;
+      ">
+
+        <div style="
+          font-size:18px;
+          font-weight:bold;
+          margin-bottom:10px;
+        ">
+          Incident n°${ticket.id} — ${echapper(ticket.titre)}
+        </div>
+
+        <div style="margin-bottom:4px;">
+          <strong>Salle :</strong>
+          ${echapper(ticket.salle)}
+        </div>
+
+        <div style="margin-bottom:4px;">
+          <strong>Type :</strong>
+          ${echapper(ticket.types.join(', ') || 'Non précisé')}
+        </div>
+
+        <div>
+          <strong>Signalé le :</strong>
+          ${echapper(dateFr(ticket.created_at))}
+        </div>
+
+      </div>
+
+      <div style="
+        color:#6B7280;
+        font-size:12px;
+        text-transform:uppercase;
+        font-weight:bold;
+        margin-bottom:5px;
+      ">
+        Description
+      </div>
+
+      <div style="
+        background:${GRIS};
+        padding:14px 16px;
+        border-radius:6px;
+        white-space:pre-wrap;
+      ">${echapper(ticket.description)}</div>
+
+      ${bouton('Voir la fiche incident', urlFiche)}
     `,
-    '#B91C1C',
+    ROUGE,
   )
 
   const texte = [
-    'RISQUE D\'ACCIDENT OU DE BLESSURE SIGNALÉ',
+    'HELPDESK URGENT',
     '',
-    `Incident   : n° ${ticket.id}`,
-    `Salle      : ${ticket.salle}`,
-    `Titre      : ${ticket.titre}`,
-    `Type(s)    : ${ticket.types.join(', ') || 'Non précisé'}`,
-    `Déclaré le : ${dateFr(ticket.created_at)}`,
-    `Par        : ${ticket.demandeur_nom} (${ticket.demandeur_email})`,
+    "Un incident présentant un risque d'accident ou de blessure vient d'être signalé.",
+    '',
+    `Incident : n°${ticket.id}`,
+    `Titre : ${ticket.titre}`,
+    `Salle : ${ticket.salle}`,
+    `Type : ${ticket.types.join(', ') || 'Non précisé'}`,
+    `Signalé le : ${dateFr(ticket.created_at)}`,
     '',
     'Description :',
     ticket.description,
     '',
-    urlFiche ? `Fiche : ${urlFiche}` : '',
+    urlFiche ? `Voir la fiche incident : ${urlFiche}` : '',
   ].join('\n')
 
   return { sujet, html, texte }
 }
 
-/**
- * Compose le récapitulatif hebdomadaire des nouveaux incidents.
- *
- * @param tickets Incidents déclarés durant la période.
- * @param debut Début de la période (ISO).
- * @param fin Fin de la période (ISO).
- * @param urlSuivi Lien vers le tableau de suivi, ou chaîne vide.
- */
+
+/* =========================================================
+   HELPDESK HEBDO
+   ========================================================= */
+
 export const recapHebdomadaire = (
   tickets: TicketCourriel[],
   debut: string,
   fin: string,
   urlSuivi: string,
 ) => {
-  const periode = `du ${dateFr(debut).split(' à ')[0]} au ${dateFr(fin).split(' à ')[0]}`
-  const urgents = tickets.filter(t => t.risque_accident)
-  const sujet = `Récapitulatif hebdomadaire — ${tickets.length} nouvel(le)(s) incident(s)`
 
-  // Le cas « aucun incident » est traité explicitement : recevoir un tableau
-  // vide sans explication laisse penser à une panne du service.
-  const corps = tickets.length === 0
-    ? `<p style="margin:0;">Aucun nouvel incident n'a été déclaré sur cette période.</p>${urlSuivi ? `<p><a href="${echapper(urlSuivi)}">Ouvrir le suivi des incidents</a></p>` : ''}`
-    : `
-      <p style="margin:0 0 16px;">
-        <strong>${tickets.length}</strong> nouvel(le)(s) incident(s) déclaré(s) ${echapper(periode)},
-        dont <strong style="color:#B91C1C;">${urgents.length}</strong> avec risque d'accident.
+  const periode =
+    `du ${dateCourteFr(debut)} au ${dateCourteFr(fin)}`
+
+  const sujet =
+    `Helpdesk Hebdo — ${tickets.length} nouveau${tickets.length > 1 ? 'x' : ''} incident${tickets.length > 1 ? 's' : ''}`
+
+  let corps = ''
+
+  if (tickets.length === 0) {
+
+    corps = `
+      <p style="margin:0 0 8px;font-size:16px;">
+        Bonjour,
       </p>
-      <table style="border-collapse:collapse;width:100%;font-size:13px;">
-        <tr style="background:${JAUNE};">
-          <th align="left" style="padding:8px;border-bottom:2px solid ${NOIR};">N°</th>
-          <th align="left" style="padding:8px;border-bottom:2px solid ${NOIR};">Salle</th>
-          <th align="left" style="padding:8px;border-bottom:2px solid ${NOIR};">Titre</th>
-        </tr>
-        ${tickets.map(t => `
-        <tr${t.risque_accident ? ' style="background:#FEF2F2;"' : ''}>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${t.id}</td>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${echapper(t.salle)}</td>
-          <td style="padding:8px;border-bottom:1px solid #e5e7eb;">
-            ${echapper(t.titre)}${t.risque_accident ? ' <strong style="color:#B91C1C;">(risque)</strong>' : ''}
-          </td>
-        </tr>`).join('')}
-      </table>
-      ${urlSuivi ? `<p style="margin:20px 0 0;"><a href="${echapper(urlSuivi)}" style="display:inline-block;background:${NOIR};color:#fff;text-decoration:none;font-weight:bold;padding:12px 20px;border-radius:6px;">Ouvrir le suivi des incidents</a></p>` : ''}
+
+      <p style="margin:0 0 20px;">
+        Aucun nouvel incident n'a été déclaré ${echapper(periode)}.
+      </p>
+
+      ${bouton('Accéder au suivi des incidents', urlSuivi)}
     `
 
+  } else {
+
+    corps = `
+      <p style="margin:0 0 8px;font-size:16px;">
+        Bonjour,
+      </p>
+
+      <p style="margin:0 0 22px;">
+        Voici les nouveaux incidents déclarés sur CESI Helpdesk
+        <strong>${echapper(periode)}</strong>.
+      </p>
+
+      <table
+        width="100%"
+        cellspacing="0"
+        cellpadding="0"
+        border="0"
+        style="
+          border-collapse:collapse;
+          width:100%;
+          font-size:13px;
+          border:1px solid #D1D5DB;
+        "
+      >
+
+        <tr style="background:${JAUNE};">
+          <th align="left"
+              style="padding:10px 8px;border-bottom:2px solid ${NOIR};">
+            N°
+          </th>
+
+          <th align="left"
+              style="padding:10px 8px;border-bottom:2px solid ${NOIR};">
+            Date
+          </th>
+
+          <th align="left"
+              style="padding:10px 8px;border-bottom:2px solid ${NOIR};">
+            Salle
+          </th>
+
+          <th align="left"
+              style="padding:10px 8px;border-bottom:2px solid ${NOIR};">
+            Type
+          </th>
+
+          <th align="left"
+              style="padding:10px 8px;border-bottom:2px solid ${NOIR};">
+            Incident
+          </th>
+
+          <th align="center"
+              style="padding:10px 8px;border-bottom:2px solid ${NOIR};">
+            Risque
+          </th>
+        </tr>
+
+        ${tickets.map(ticket => `
+          <tr style="
+            ${ticket.risque_accident
+              ? 'background:#FEF2F2;'
+              : 'background:#ffffff;'}
+          ">
+
+            <td style="
+              padding:10px 8px;
+              border-bottom:1px solid #E5E7EB;
+              font-weight:bold;
+            ">
+              ${ticket.id}
+            </td>
+
+            <td style="
+              padding:10px 8px;
+              border-bottom:1px solid #E5E7EB;
+              white-space:nowrap;
+            ">
+              ${dateCourteFr(ticket.created_at)}
+            </td>
+
+            <td style="
+              padding:10px 8px;
+              border-bottom:1px solid #E5E7EB;
+            ">
+              ${echapper(ticket.salle)}
+            </td>
+
+            <td style="
+              padding:10px 8px;
+              border-bottom:1px solid #E5E7EB;
+            ">
+              ${echapper(ticket.types.join(', ') || 'Non précisé')}
+            </td>
+
+            <td style="
+              padding:10px 8px;
+              border-bottom:1px solid #E5E7EB;
+            ">
+              ${echapper(ticket.titre)}
+            </td>
+
+            <td align="center"
+                style="
+                  padding:10px 8px;
+                  border-bottom:1px solid #E5E7EB;
+                  font-weight:bold;
+                  color:${ticket.risque_accident ? ROUGE : '#6B7280'};
+                ">
+              ${ticket.risque_accident ? 'OUI' : '—'}
+            </td>
+
+          </tr>
+        `).join('')}
+
+      </table>
+
+      <p style="
+        margin:18px 0 0;
+        color:#6B7280;
+        font-size:12px;
+      ">
+        ${tickets.length} incident${tickets.length > 1 ? 's' : ''}
+        déclaré${tickets.length > 1 ? 's' : ''} sur la période.
+      </p>
+
+      ${bouton('Accéder au suivi des incidents', urlSuivi)}
+    `
+  }
+
   const texte = tickets.length === 0
-    ? `Aucun nouvel incident n'a été déclaré sur cette période (${periode}).\n${urlSuivi ? `Suivi : ${urlSuivi}` : ''}`
+    ? [
+        'HELPDESK HEBDO',
+        '',
+        `Aucun nouvel incident déclaré ${periode}.`,
+        '',
+        urlSuivi ? `Suivi des incidents : ${urlSuivi}` : '',
+      ].join('\n')
     : [
-        `${tickets.length} nouvel(le)(s) incident(s) ${periode}, dont ${urgents.length} avec risque d'accident.`,
+        'HELPDESK HEBDO',
         '',
-        ...tickets.map(t => `n° ${t.id} — ${t.salle} — ${t.titre}${t.risque_accident ? ' (RISQUE)' : ''}`),
+        `Nouveaux incidents ${periode} :`,
         '',
-        urlSuivi ? `Suivi : ${urlSuivi}` : '',
+        ...tickets.map(ticket =>
+          `n°${ticket.id} | ${dateCourteFr(ticket.created_at)} | ${ticket.salle} | ${ticket.types.join(', ') || 'Non précisé'} | ${ticket.titre}${ticket.risque_accident ? ' | RISQUE' : ''}`
+        ),
+        '',
+        urlSuivi ? `Accéder au suivi : ${urlSuivi}` : '',
       ].join('\n')
 
-  return { sujet, html: enveloppe('Récapitulatif hebdomadaire', corps, JAUNE), texte }
+  return {
+    sujet,
+    html: enveloppe(
+      'Helpdesk Hebdo',
+      corps,
+      JAUNE,
+    ),
+    texte,
+  }
 }
