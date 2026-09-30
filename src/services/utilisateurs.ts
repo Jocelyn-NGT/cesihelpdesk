@@ -94,6 +94,36 @@ export const utilisateurService = {
     if (error) throw new Error(messageErreur(error, 'Impossible de choisir le destinataire'))
   },
 
+  async lireConfigurationNotifications(): Promise<{ jour: number; heure: string }> {
+    const { data, error } = await supabase.rpc('lire_configuration_notifications')
+
+    if (error) {
+      throw new Error(messageErreur(error, 'Impossible de lire la programmation des notifications'))
+    }
+
+    const ligne = Array.isArray(data) ? data[0] : data
+
+    if (!ligne) {
+      return { jour: 5, heure: '08:00' }
+    }
+
+    return {
+      jour: Number(ligne.jour),
+      heure: String(ligne.heure).slice(0, 5),
+    }
+  },
+
+  async modifierConfigurationNotifications(jour: number, heure: string): Promise<void> {
+    const { error } = await supabase.rpc('modifier_configuration_notifications', {
+      p_jour: jour,
+      p_heure: heure,
+    })
+
+    if (error) {
+      throw new Error(messageErreur(error, 'Impossible de modifier la programmation des notifications'))
+    }
+  },
+
   async supprimer(id: string): Promise<void> {
     const { data, error } = await supabase.functions.invoke<{ supprime?: boolean; erreur?: string }>('comptes', {
       body: { action: 'supprimer', id },

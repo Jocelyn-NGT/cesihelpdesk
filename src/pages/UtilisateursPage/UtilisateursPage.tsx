@@ -201,6 +201,13 @@ export const UtilisateursPage = () => {
   const [lien, setLien] = useState<LienProduit | null>(null)
   const [aSupprimer, setASupprimer] = useState<Profil | null>(null)
 
+  // Programmation globale du récapitulatif hebdomadaire.
+  // ISO : lundi=1 ... dimanche=7.
+  const [jourNotifications, setJourNotifications] = useState(5)
+  const [heureNotifications, setHeureNotifications] = useState('08:00')
+  const [chargementNotifications, setChargementNotifications] = useState(true)
+  const [enregistrementNotifications, setEnregistrementNotifications] = useState(false)
+
   const charger = useCallback(
     () => utilisateurService.listerTous()
       .then(setComptes)
@@ -210,6 +217,43 @@ export const UtilisateursPage = () => {
   )
 
   useEffect(() => { void charger() }, [charger])
+
+  useEffect(() => {
+    let actif = true
+
+    utilisateurService.lireConfigurationNotifications()
+      .then(configuration => {
+        if (!actif) return
+        setJourNotifications(configuration.jour)
+        setHeureNotifications(configuration.heure)
+      })
+      .catch((cause: unknown) => {
+        if (actif) {
+          toast.erreurDe(cause, 'Impossible de charger la programmation des notifications.')
+        }
+      })
+      .finally(() => {
+        if (actif) setChargementNotifications(false)
+      })
+
+    return () => { actif = false }
+  }, [toast])
+
+  const enregistrerConfigurationNotifications = async () => {
+    setEnregistrementNotifications(true)
+
+    try {
+      await utilisateurService.modifierConfigurationNotifications(
+        jourNotifications,
+        heureNotifications,
+      )
+      toast.succes('Programmation du récapitulatif enregistrée.')
+    } catch (cause) {
+      toast.erreurDe(cause, 'Impossible d’enregistrer la programmation.')
+    } finally {
+      setEnregistrementNotifications(false)
+    }
+  }
 
   const resultats = useMemo(() => {
     const critere = normaliser(recherche)
@@ -443,8 +487,8 @@ export const UtilisateursPage = () => {
 
       <section aria-labelledby="liste-titre" className="bg-white rounded-xl shadow p-4 sm:p-6">
         <p className="text-sm text-gray-600 mb-3">
-          Cochez un destinataire pour le récapitulatif du vendredi à 8 h (heure de Paris)
-          et les alertes immédiates en cas de risque. Cocher un autre compte remplace le précédent.
+          Cochez le compte qui recevra le récapitulatif hebdomadaire et les alertes immédiates
+          en cas de risque. Cocher un autre compte remplace le précédent.
         </p>
         {!chargement && !comptes.some(c => c.notificationsEmail && c.actif) && (
           <p role="status" className="mb-4 text-sm font-bold text-amber-800">Aucun destinataire sélectionné : les notifications ne peuvent pas être envoyées.</p>
@@ -462,6 +506,79 @@ export const UtilisateursPage = () => {
               className="w-full border-2 border-gray-200 rounded pl-9 pr-2 py-2 min-h-11 focus:border-black outline-none text-sm"
             />
           </div>
+        </div>
+
+        <div className="mb-5 p-4 border-2 border-gray-200 rounded-lg bg-gray-50">
+          <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+            <div className="flex-1">
+              <h3 className="font-black text-sm uppercase tracking-tight">
+                Récapitulatif hebdomadaire
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Configurez le jour et l’heure d’envoi du récapitulatif des incidents.
+                Les alertes en cas de risque restent envoyées immédiatement.
+              </p>
+            </div>
+
+            <div>
+              <label
+                htmlFor="notifications-jour"
+                className="block text-sm font-bold mb-1"
+              >
+                Jour
+              </label>
+              <select
+                id="notifications-jour"
+                value={jourNotifications}
+                disabled={chargementNotifications || enregistrementNotifications}
+                onChange={e => setJourNotifications(Number(e.target.value))}
+                className={classesSelect}
+              >
+                <option value={1}>Lundi</option>
+                <option value={2}>Mardi</option>
+                <option value={3}>Mercredi</option>
+                <option value={4}>Jeudi</option>
+                <option value={5}>Vendredi</option>
+                <option value={6}>Samedi</option>
+                <option value={7}>Dimanche</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="notifications-heure"
+                className="block text-sm font-bold mb-1"
+              >
+                Heure
+              </label>
+              <input
+                id="notifications-heure"
+                type="time"
+                value={heureNotifications}
+                disabled={chargementNotifications || enregistrementNotifications}
+                onChange={e => setHeureNotifications(e.target.value)}
+                className={classesSelect}
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void enregistrerConfigurationNotifications()}
+              disabled={
+                chargementNotifications ||
+                enregistrementNotifications ||
+                !heureNotifications
+              }
+              className={classesBoutonPrincipal}
+            >
+              <Icons.Check />
+              {enregistrementNotifications ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </div>
+
+          <p className="text-xs text-gray-500 mt-3">
+            Heure de Paris. Le destinataire des e-mails est sélectionné dans le tableau ci-dessous.
+          </p>
         </div>
 
         <div className="overflow-x-auto">
