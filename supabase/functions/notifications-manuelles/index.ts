@@ -343,7 +343,10 @@ Deno.serve(async requete => {
       '',
       `Accéder au suivi : ${urlApplication}/suivi`,
       '',
-      'Ceci est un message automatique du Helpdesk CESI.',
+
+'Message automatique du portail CESI Helpdesk.',
+'Merci de ne pas répondre à cet e-mail.',
+
     ].join('\n')
 
     const html = `
@@ -368,7 +371,7 @@ Deno.serve(async requete => {
       </p>
 
       <p style="color:#666;font-size:12px;">
-        Ceci est un message automatique du Helpdesk CESI.
+        Message automatique du portail CESI Helpdesk.<br>Merci de ne pas répondre à cet e-mail.
       </p>
     `
 

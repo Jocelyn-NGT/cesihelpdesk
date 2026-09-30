@@ -149,13 +149,28 @@ export const envoyer = async (
     )
   })
 
+  /**
+   * Nettoyage du HTML avant l'encodage MIME.
+   *
+   * Les espaces d'indentation présents sur les lignes HTML peuvent être
+   * encodés en quoted-printable (=20) par certains transports SMTP.
+   *
+   * On supprime donc les indentations et lignes vides inutiles avant
+   * de transmettre le HTML à Denomailer.
+   */
+  const htmlNettoye = message.html
+    .split('\n')
+    .map(ligne => ligne.trim())
+    .filter(ligne => ligne.length > 0)
+    .join('')
+
   try {
 
     /**
      * Envoi du message.
      *
-     * Denomailer gère lui-même l'encodage MIME
-     * du texte et du HTML.
+     * Denomailer gère l'encodage MIME.
+     * Le HTML lui est transmis sans espaces d'indentation inutiles.
      */
     await Promise.race([
       client.send({
@@ -163,7 +178,7 @@ export const envoyer = async (
         to: message.destinataires,
         subject: message.sujet,
         content: message.texte,
-        html: message.html,
+        html: htmlNettoye,
       }),
       delai,
     ])
