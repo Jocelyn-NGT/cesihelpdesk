@@ -50,7 +50,7 @@ export const AppHeader = () => {
                     <Icons.Building /> <span className="hidden sm:inline">Salles</span>
                   </NavLink>
                   <NavLink to="/utilisateurs" className={lienClasses} title="Gestion des comptes du personnel">
-                    <Icons.Users /> <span className="hidden sm:inline">Comptes</span>
+                    <Icons.Users /> <span className="hidden sm:inline">Admin</span>
                   </NavLink>
                 </>
               )}

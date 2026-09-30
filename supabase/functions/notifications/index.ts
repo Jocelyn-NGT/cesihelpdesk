@@ -51,7 +51,7 @@ type LigneTicket = Omit<TicketCourriel, 'salle' | 'types'> & {
 
 const SELECTION = `
   id, titre, demandeur_nom, demandeur_email, description,
-  risque_accident, created_at,
+  risque_accident, created_at, statut,
   salles ( nom ),
   ticket_categories ( categories_incident ( label ) )
 `
@@ -65,6 +65,7 @@ const aplatir = (ligne: LigneTicket): TicketCourriel => ({
   description: ligne.description,
   risque_accident: ligne.risque_accident,
   created_at: ligne.created_at,
+  statut: ligne.statut,
   types: ligne.ticket_categories
     .map(lien => lien.categories_incident?.label)
     .filter((label): label is string => Boolean(label)),
@@ -128,7 +129,7 @@ Deno.serve(async requete => {
       let offset = 0
       while (true) {
         const { data, error } = await supabase.from('tickets').select(SELECTION)
-          .gte('created_at', job.debut).lt('created_at', job.fin)
+          .in('statut', ['NOUVEAU', 'EN_COURS', 'EN_ATTENTE'])
           .order('created_at', { ascending: true }).order('id', { ascending: true })
           .range(offset, offset + 499)
         if (error) throw error
@@ -137,12 +138,12 @@ Deno.serve(async requete => {
         if (lignes.length < 500) break
         offset += lignes.length
       }
-      const filtres = new URLSearchParams({
-        du: new Date(job.debut).toISOString().slice(0, 10),
-        au: new Date(job.fin).toISOString().slice(0, 10),
-        statut: 'TOUS',
-      })
-      message = recapHebdomadaire(tickets, job.debut, job.fin, `${urlApplication}/suivi?${filtres}`)
+      message = recapHebdomadaire(
+        tickets,
+        job.debut,
+        job.fin,
+        `${urlApplication}/suivi`,
+      )
     }
     resultat = await envoyer({ destinataires: [destinataire], ...message })
   } catch (cause) {

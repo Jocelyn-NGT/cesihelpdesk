@@ -132,9 +132,6 @@ export const envoyer = async (
         password: motDePasse,
       },
     },
-    debug: {
-      encodeLB: true,
-    },
   })
 
   /**
@@ -165,7 +162,7 @@ export const envoyer = async (
     .split('\n')
     .map(ligne => ligne.trim())
     .filter(ligne => ligne.length > 0)
-    .join('\r\n')
+    .join('')
 
   try {
 

@@ -293,72 +293,39 @@ export const recapHebdomadaire = (
 
   const libelleStatut = (statut: TicketCourriel['statut']) => {
     switch (statut) {
-      case 'NOUVEAU': return 'Nouveau'
-      case 'EN_COURS': return 'En cours'
-      case 'EN_ATTENTE': return 'En attente'
-      case 'TERMINE': return 'Terminé'
+      case 'NOUVEAU':
+        return 'Nouveau'
+      case 'EN_COURS':
+        return 'En cours'
+      case 'EN_ATTENTE':
+        return 'En attente'
+      case 'TERMINE':
+        return 'Terminé'
+    }
+  }
+
+  const couleurStatut = (statut: TicketCourriel['statut']) => {
+    switch (statut) {
+      case 'NOUVEAU':
+        return '#DBEAFE'
+      case 'EN_COURS':
+        return '#FEF3C7'
+      case 'EN_ATTENTE':
+        return '#EDE9FE'
+      case 'TERMINE':
+        return '#DCFCE7'
     }
   }
 
   const ticketsTries = [...tickets].sort((a, b) => {
-    const ordre = {
-      NOUVEAU: 0,
-      EN_COURS: 1,
-      EN_ATTENTE: 2,
-      TERMINE: 3,
-    }
-
-    const diff = ordre[a.statut] - ordre[b.statut]
-
-    if (diff !== 0) return diff
-
+    const ordre = { NOUVEAU: 0, EN_COURS: 1, EN_ATTENTE: 2, TERMINE: 3 }
+    const diffStatut = ordre[a.statut] - ordre[b.statut]
+    if (diffStatut !== 0) return diffStatut
     return a.id - b.id
   })
 
-  const lignes = ticketsTries.map(ticket => `
-    <tr bgcolor="${ticket.risque_accident ? '#FEF2F2' : '#FFFFFF'}">
-
-      <td style="padding:8px;border:1px solid #D1D5DB;white-space:nowrap;">
-        ${libelleStatut(ticket.statut)}
-      </td>
-
-      <td style="padding:8px;border:1px solid #D1D5DB;font-weight:bold;">
-        ${ticket.id}
-      </td>
-
-      <td style="padding:8px;border:1px solid #D1D5DB;white-space:nowrap;">
-        ${dateCourteFr(ticket.created_at)}
-      </td>
-
-      <td style="padding:8px;border:1px solid #D1D5DB;">
-        ${echapper(ticket.salle)}
-      </td>
-
-      <td style="padding:8px;border:1px solid #D1D5DB;">
-        ${echapper(ticket.types.join(', ') || 'Non précisé')}
-      </td>
-
-      <td style="padding:8px;border:1px solid #D1D5DB;">
-        ${echapper(ticket.titre)}
-      </td>
-
-      <td
-        align="center"
-        style="
-          padding:8px;
-          border:1px solid #D1D5DB;
-          font-weight:bold;
-          color:${ticket.risque_accident ? ROUGE : '#6B7280'};
-        "
-      >
-        ${ticket.risque_accident ? 'OUI' : '—'}
-      </td>
-
-    </tr>
-  `).join('')
-
   const corps = `
-    <p style="margin:0 0 8px;">
+    <p style="margin:0 0 8px;font-size:16px;">
       Bonjour,
     </p>
 
@@ -367,9 +334,8 @@ export const recapHebdomadaire = (
       <strong>${dateCourteFr(fin)}</strong>.
     </p>
 
-    <p style="margin:0 0 20px;color:#374151;">
-      <strong>${tickets.length}</strong>
-      incident${tickets.length > 1 ? 's' : ''} ouvert${tickets.length > 1 ? 's' : ''}
+    <p style="margin:0 0 18px;font-size:13px;color:#374151;">
+      <strong>${tickets.length}</strong> incident${tickets.length > 1 ? 's' : ''} ouvert${tickets.length > 1 ? 's' : ''}
       · ${nouveaux} nouveau${nouveaux > 1 ? 'x' : ''}
       · ${enCours} en cours
       · ${enAttente} en attente
@@ -377,69 +343,75 @@ export const recapHebdomadaire = (
 
     <table
       width="100%"
-      border="1"
       cellspacing="0"
       cellpadding="0"
+      border="0"
       style="
-        width:100%;
         border-collapse:collapse;
+        width:100%;
+        font-size:13px;
         border:1px solid #D1D5DB;
-        font-family:Arial,Helvetica,sans-serif;
-        font-size:12px;
       "
     >
-
-      <tr bgcolor="#FBE800">
-
-        <th align="left" style="padding:8px;border:1px solid #D1D5DB;">
-          Statut
-        </th>
-
-        <th align="left" style="padding:8px;border:1px solid #D1D5DB;">
-          N°
-        </th>
-
-        <th align="left" style="padding:8px;border:1px solid #D1D5DB;">
-          Date
-        </th>
-
-        <th align="left" style="padding:8px;border:1px solid #D1D5DB;">
-          Salle
-        </th>
-
-        <th align="left" style="padding:8px;border:1px solid #D1D5DB;">
-          Type
-        </th>
-
-        <th align="left" style="padding:8px;border:1px solid #D1D5DB;">
-          Incident
-        </th>
-
-        <th align="center" style="padding:8px;border:1px solid #D1D5DB;">
-          Risque
-        </th>
-
+      <tr style="background:${JAUNE};">
+        <th align="left" style="padding:10px 8px;border-bottom:2px solid ${NOIR};">Statut</th>
+        <th align="left" style="padding:10px 8px;border-bottom:2px solid ${NOIR};">N°</th>
+        <th align="left" style="padding:10px 8px;border-bottom:2px solid ${NOIR};">Date</th>
+        <th align="left" style="padding:10px 8px;border-bottom:2px solid ${NOIR};">Salle</th>
+        <th align="left" style="padding:10px 8px;border-bottom:2px solid ${NOIR};">Type</th>
+        <th align="left" style="padding:10px 8px;border-bottom:2px solid ${NOIR};">Incident</th>
+        <th align="center" style="padding:10px 8px;border-bottom:2px solid ${NOIR};">Risque</th>
       </tr>
 
-      ${lignes}
+      ${ticketsTries.map(ticket => `
+        <tr style="${ticket.risque_accident ? 'background:#FEF2F2;' : 'background:#ffffff;'}">
+          <td style="padding:10px 8px;border-bottom:1px solid #E5E7EB;">
+            <span style="
+              display:inline-block;
+              padding:3px 8px;
+              border-radius:999px;
+              font-size:12px;
+              background:${couleurStatut(ticket.statut)};
+              color:${NOIR};
+              white-space:nowrap;
+            ">
+              ${libelleStatut(ticket.statut)}
+            </span>
+          </td>
 
+          <td style="padding:10px 8px;border-bottom:1px solid #E5E7EB;font-weight:bold;">
+            ${ticket.id}
+          </td>
+
+          <td style="padding:10px 8px;border-bottom:1px solid #E5E7EB;white-space:nowrap;">
+            ${dateCourteFr(ticket.created_at)}
+          </td>
+
+          <td style="padding:10px 8px;border-bottom:1px solid #E5E7EB;">
+            ${echapper(ticket.salle)}
+          </td>
+
+          <td style="padding:10px 8px;border-bottom:1px solid #E5E7EB;">
+            ${echapper(ticket.types.join(', ') || 'Non précisé')}
+          </td>
+
+          <td style="padding:10px 8px;border-bottom:1px solid #E5E7EB;">
+            ${echapper(ticket.titre)}
+          </td>
+
+          <td align="center" style="
+            padding:10px 8px;
+            border-bottom:1px solid #E5E7EB;
+            font-weight:bold;
+            color:${ticket.risque_accident ? ROUGE : '#6B7280'};
+          ">
+            ${ticket.risque_accident ? 'OUI' : '—'}
+          </td>
+        </tr>
+      `).join('')}
     </table>
 
-    <p style="margin:24px 0 4px;">
-      <a
-        href="${echapper(urlSuivi)}"
-        style="
-          background:#1A1A1A;
-          color:#FFFFFF;
-          text-decoration:none;
-          font-weight:bold;
-          padding:12px 20px;
-          display:inline-block;
-        "
-      >
-        Accéder au suivi des incidents
-      </a>
-    </p>
+    ${bouton('Accéder au suivi des incidents', urlSuivi)}
   `
 
   const texte = [
@@ -451,7 +423,7 @@ export const recapHebdomadaire = (
       `[${libelleStatut(ticket.statut)}] n°${ticket.id} | ${dateCourteFr(ticket.created_at)} | ${ticket.salle} | ${ticket.types.join(', ') || 'Non précisé'} | ${ticket.titre}${ticket.risque_accident ? ' | RISQUE' : ''}`
     ),
     '',
-    `Accéder au suivi : ${urlSuivi}`,
+    urlSuivi ? `Accéder au suivi : ${urlSuivi}` : '',
   ].join('\n')
 
   return {

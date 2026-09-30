@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useTickets } from '../../hooks/useTickets'
 import { useToast } from '../../hooks/useToast'
 import { utilisateurService } from '../../services/utilisateurs'
+import { reinitialisationService } from '../../services/reinitialisation'
 import type { InvitationInput, Profil, Role } from '../../types/auth'
 import { normaliser } from '../../utils/ticketFilters'
 
@@ -200,6 +201,10 @@ export const UtilisateursPage = () => {
   const [envoiInvitation, setEnvoiInvitation] = useState(false)
   const [lien, setLien] = useState<LienProduit | null>(null)
   const [aSupprimer, setASupprimer] = useState<Profil | null>(null)
+
+  // Réinitialisation complète des incidents.
+  const [confirmationReinitialisation, setConfirmationReinitialisation] = useState(false)
+  const [reinitialisationEnCours, setReinitialisationEnCours] = useState(false)
 
   // Programmation globale du récapitulatif hebdomadaire.
   // ISO : lundi=1 ... dimanche=7.
@@ -408,12 +413,41 @@ export const UtilisateursPage = () => {
     } finally { setOccupe(null) }
   }
 
-  const actionsBloquees = occupe !== null || edition !== null || aSupprimer !== null
+  const reinitialiserIncidents = async () => {
+    setReinitialisationEnCours(true)
+
+    try {
+      const resultat = await reinitialisationService.incidents()
+
+      setConfirmationReinitialisation(false)
+
+      // Les tableaux et statistiques utilisent la copie des tickets
+      // conservée par le contexte : on la recharge immédiatement.
+      await rechargerTickets()
+
+      toast.succes(
+        `Réinitialisation terminée : ${resultat.incidents_supprimes} incident(s) supprimé(s)`
+        + (resultat.photos_supprimees > 0
+          ? ` et ${resultat.photos_supprimees} photo(s) supprimée(s).`
+          : '.'),
+      )
+    } catch (cause) {
+      toast.erreurDe(cause, 'Impossible de réinitialiser les incidents.')
+    } finally {
+      setReinitialisationEnCours(false)
+    }
+  }
+
+  const actionsBloquees =
+    occupe !== null ||
+    edition !== null ||
+    aSupprimer !== null ||
+    reinitialisationEnCours
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-black uppercase tracking-tight">Utilisateurs</h1>
+        <h1 className="text-2xl font-black uppercase tracking-tight">Admin</h1>
         <p className="text-sm text-gray-600 mt-1">
           Comptes du personnel habilité à traiter les incidents —{' '}
           {chargement
@@ -715,6 +749,79 @@ export const UtilisateursPage = () => {
         </div>
 
       </section>
+
+      <section
+        aria-labelledby="reinitialisation-titre"
+        className="bg-white border-4 border-red-700 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] rounded-xl p-6"
+      >
+        <h2
+          id="reinitialisation-titre"
+          className="text-lg font-black uppercase tracking-tight text-red-700"
+        >
+          Réinitialisation des incidents
+        </h2>
+
+        <p className="mt-3 text-sm text-gray-700">
+          Cette fonction permet de repartir avec une base d'incidents vierge.
+          Elle supprime définitivement tous les incidents enregistrés ainsi que
+          les photos qui leur sont associées.
+        </p>
+
+        <p className="mt-2 text-sm font-bold text-red-700">
+          Les statistiques seront remises à zéro et la numérotation des incidents
+          recommencera à 1.
+        </p>
+
+        <p className="mt-2 text-sm text-gray-600">
+          Les comptes utilisateurs, les salles, les catégories d'incident et la
+          configuration de l'application seront conservés.
+        </p>
+
+        <p className="mt-2 text-sm font-black">
+          Cette opération est irréversible.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => setConfirmationReinitialisation(true)}
+          disabled={actionsBloquees}
+          className="mt-5 inline-flex items-center justify-center gap-2 bg-red-700 text-white px-4 py-3 min-h-11 rounded font-bold hover:bg-red-800 disabled:opacity-50 transition-colors"
+        >
+          <Icons.Trash />
+          Réinitialiser tous les incidents
+        </button>
+      </section>
+
+      {confirmationReinitialisation && (
+        <ConfirmDialog
+          ouvert
+          titre="Confirmer la réinitialisation ?"
+          libelleConfirmer="Oui, supprimer tous les incidents"
+          occupe={reinitialisationEnCours}
+          onConfirmer={() => void reinitialiserIncidents()}
+          onAnnuler={() => setConfirmationReinitialisation(false)}
+        >
+          <p>
+            Vous êtes sur le point de supprimer définitivement
+            <strong> tous les incidents</strong> enregistrés dans le Helpdesk CESI.
+          </p>
+
+          <p className="font-bold text-red-700">
+            Les photos associées seront supprimées, les statistiques seront
+            remises à zéro et la numérotation des incidents recommencera à 1.
+          </p>
+
+          <p>
+            Les comptes utilisateurs, les salles, les catégories d'incident et
+            la configuration de l'application seront conservés.
+          </p>
+
+          <p className="font-black">
+            Cette opération est irréversible.
+          </p>
+        </ConfirmDialog>
+      )}
+
       {aSupprimer && (
         <ConfirmDialog ouvert titre={`Supprimer le compte de ${aSupprimer.nomComplet} ?`}
           libelleConfirmer="Supprimer définitivement" occupe={occupe !== null}
